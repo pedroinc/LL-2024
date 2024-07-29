@@ -21,6 +21,7 @@
     "typescript-eslint": "^7.17.0"
   },
   "dependencies": {
+    "dayjs": "^1.11.12",
     "express": "^4.19.2",
     "express-fileupload": "^1.5.1"
   }

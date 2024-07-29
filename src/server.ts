@@ -1,7 +1,8 @@
 import express, { Request, Response } from "express";
 import fileUpload, { UploadedFile } from "express-fileupload";
-const fs = require("fs");
+import fs from "fs";
 import readline from "readline";
+import dayjs from "dayjs";
 
 const app = express();
 
@@ -16,12 +17,21 @@ app.use(
 );
 
 type RequestFileLine = {
-  userId: string;    // 10
-  userName: string;  // 45
-  orderId: string;   // 10
+  userId: string; // 10
+  userName: string; // 45
+  orderId: string; // 10
   productId: string; // 10
-  value: string;     // 12
-  date: string;      // 8
+  value: string; // 12
+  date: string; // 8
+};
+
+type OrderItem = {
+  userId: number;
+  userName: string;
+  orderId: number;
+  productId: number;
+  value: number;
+  date: Date;
 };
 
 const lineFormatter = (line: string): RequestFileLine => {
@@ -42,11 +52,26 @@ const lineFormatter = (line: string): RequestFileLine => {
   } as RequestFileLine;
 };
 
+const convertLineToOrderItem = (line: RequestFileLine): OrderItem => {
+  const strYear = line.date.substring(0, 4);
+  const strMonth = line.date.substring(4, 6);
+  const strDay = line.date.substring(6, 8);
+
+  return {
+    userId: parseInt(line.userId),
+    userName: line.userName,
+    orderId: parseInt(line.orderId),
+    productId: parseInt(line.productId),
+    value: parseFloat(line.value),
+    date: dayjs(`${strYear}-${strMonth}-${strDay}`).toDate(),
+  };
+};
+
 app.post("/upload", async (req: Request, res: Response) => {
   try {
     const { tempFilePath } = req.files?.service as UploadedFile;
 
-    const items: RequestFileLine[] = [];
+    const items: OrderItem[] = [];
 
     const file = readline.createInterface({
       input: fs.createReadStream(tempFilePath),
@@ -55,14 +80,23 @@ app.post("/upload", async (req: Request, res: Response) => {
     });
 
     file
-      .on("line", (line) => {
-        const requestFileLine = lineFormatter(line);
-        items.push(requestFileLine);
+      .on("line", (rawLine) => {
+        const fileLine = lineFormatter(rawLine);
+        const orderItem = convertLineToOrderItem(fileLine);
+        items.push(orderItem);
       })
       .on("close", () => {
+        // TODO
+        /*         
+        terminou de extrair a lista do arquivo
+
+        1. verifica se userId existe
+        ...
+        ...
+        */
+
         return res.json(items);
       });
-
   } catch (error) {
     console.error(error);
     return res.json({ error });
