@@ -1,10 +1,31 @@
+// import "reflect-metadata";
+
 import express, { Request, Response } from "express";
 import fileUpload, { UploadedFile } from "express-fileupload";
 import fs from "fs";
 import readline from "readline";
 import dayjs from "dayjs";
 
+import mongoose from "mongoose";
+// import { AppDataSource } from "./database/data-source";
+import {
+  CreateOrderItemService,
+  OrderItem,
+} from "./services/CreateOrderItemService";
+import { orderItemSchema } from "./schemas/OrderItem";
+
 const app = express();
+
+const username = process.env.MONGO_USER;
+const password = process.env.MONGO_PASS;
+
+let uri = "mongodb://localhost:27017/local";
+
+async function mongo_connect() {
+  await mongoose.connect(uri);
+}
+
+// const createOrderItemService = new CreateOrderItemService();
 
 app.use(express.json());
 
@@ -25,13 +46,22 @@ type RequestFileLine = {
   date: string; // 8
 };
 
-type OrderItem = {
-  userId: number;
-  userName: string;
-  orderId: number;
-  productId: number;
+type ProductResponse = {
+  product_id: number;
   value: number;
+};
+
+type OrderResponse = {
+  order_id: number;
+  total: number;
   date: Date;
+  products: ProductResponse[];
+};
+
+type UserResponse = {
+  user_id: number;
+  name: string;
+  orders: OrderResponse[];
 };
 
 const lineFormatter = (line: string): RequestFileLine => {
@@ -79,24 +109,54 @@ app.post("/upload", async (req: Request, res: Response) => {
       terminal: false,
     });
 
+    let usersMap = {};
+
     file
-      .on("line", (rawLine) => {
+      .on("line", async (rawLine) => {
         const fileLine = lineFormatter(rawLine);
         const orderItem = convertLineToOrderItem(fileLine);
         items.push(orderItem);
       })
-      .on("close", () => {
+      .on("close", async () => {
         // TODO
         /*         
         terminou de extrair a lista do arquivo
-
-        1. verifica se userId existe
-        ...
-        ...
         */
+
+        const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
+
+        items.map(
+          async ({
+            userId,
+            userName,
+            orderId,
+            productId,
+            value,
+            date,
+          }: OrderItem) => {
+            try {
+              const doc = new OrderItemModel({
+                _id: new mongoose.Types.ObjectId(),
+                userId,
+                userName,
+                orderId,
+                productId,
+                value,
+                date,
+              });
+              const newDoc = await doc.save();
+              console.log(newDoc);
+            } catch (error) {
+              console.error(error);
+            }
+          }
+        );
+
+        // console.log("total lines", items.length);
 
         return res.json(items);
       });
+
   } catch (error) {
     console.error(error);
     return res.json({ error });
@@ -105,4 +165,10 @@ app.post("/upload", async (req: Request, res: Response) => {
 
 app.listen(4000, "0.0.0.0", () => {
   console.log(`server running on port 4000`);
+
+  mongo_connect()
+    .then(() => {
+      console.log("mongo initialized");
+    })
+    .catch((err) => console.log(err));
 });
