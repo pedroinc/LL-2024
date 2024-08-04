@@ -6,7 +6,7 @@ import fs from "fs";
 import readline from "readline";
 import dayjs from "dayjs";
 
-import mongoose from "mongoose";
+import mongoose, { Mongoose } from "mongoose";
 // import { AppDataSource } from "./database/data-source";
 import {
   CreateOrderItemService,
@@ -16,13 +16,19 @@ import { orderItemSchema } from "./schemas/OrderItem";
 
 const app = express();
 
-const username = process.env.MONGO_USER;
-const password = process.env.MONGO_PASS;
+const dbUri = process.env.DB_URI as string;
+const strPort = process.env.PORT as string;
+const host = process.env.HOST as string;
 
-let uri = "mongodb://localhost:27017/local";
+const config = {
+  port: parseInt(strPort),
+  host,
+};
 
-async function mongo_connect() {
-  await mongoose.connect(uri);
+let db: Mongoose;
+
+async function dbConnect(uri) {
+  return await mongoose.connect(uri);
 }
 
 // const createOrderItemService = new CreateOrderItemService();
@@ -97,6 +103,79 @@ const convertLineToOrderItem = (line: RequestFileLine): OrderItem => {
   };
 };
 
+// app.get("/", async (req: Request, res: Response) => {
+//   const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
+//   const items = await OrderItemModel.find();
+//   return res.json(items);
+// });
+
+app.get("/", async (req: Request, res: Response) => {
+  const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
+
+  // const items = await OrderItemModel.aggregate([
+  //   {
+  //     $match: {
+  //       orderId: 177,
+  //     },
+  //   },
+  //   {
+  //     $group: {
+  //       _id: "$orderId",
+  //       total: { $sum: "$value" },
+  //       orders: {
+  //         $push: {
+  //           order_id: "$orderId",
+  //           user_id: "$userId",
+  //           name: "$userName",
+  //           date: "$date",
+  //           products: {
+  //             product_id: "$productId",
+  //             value: "$value",
+  //           },
+  //         },
+  //       },
+  //     },
+  //   },
+  //   {
+  //     $project: {
+  //       _id: 0,
+  //       orderId: "$_id",
+  //       total: 1,
+  //       orders: 1,
+  //     },
+  //   },
+  // ]);
+
+  const items = await OrderItemModel.aggregate([
+    {
+      $match: {
+        orderId: 177,
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        user_id: "$userId",
+        name: "$userName",
+        orders: [
+          {
+            order_id: "$orderId",
+            total: { $sum: "$value" },
+            date: "$date",
+            products: [{ product_id: "$productId", value: "$value" }],
+          },
+        ],
+      },
+    },
+  ]);
+
+  //   {
+  //     $group: { _id: "$name", totalQuantity: { $sum: "$quantity" } }
+  //  }
+
+  return res.json(items);
+});
+
 app.post("/upload", async (req: Request, res: Response) => {
   try {
     const { tempFilePath } = req.files?.service as UploadedFile;
@@ -108,8 +187,6 @@ app.post("/upload", async (req: Request, res: Response) => {
       output: process.stdout,
       terminal: false,
     });
-
-    let usersMap = {};
 
     file
       .on("line", async (rawLine) => {
@@ -145,30 +222,31 @@ app.post("/upload", async (req: Request, res: Response) => {
                 date,
               });
               const newDoc = await doc.save();
-              console.log(newDoc);
+              // console.log(newDoc);
             } catch (error) {
               console.error(error);
             }
           }
         );
-
-        // console.log("total lines", items.length);
-
         return res.json(items);
       });
-
   } catch (error) {
     console.error(error);
     return res.json({ error });
   }
 });
 
-app.listen(4000, "0.0.0.0", () => {
-  console.log(`server running on port 4000`);
+app.listen(config.port, config.host, () => {
+  console.log(`server running on port ${config.port}`);
 
-  mongo_connect()
-    .then(() => {
+  dbConnect(dbUri)
+    .then((connection) => {
+      db = connection;
       console.log("mongo initialized");
+      console.log(db);
     })
-    .catch((err) => console.log(err));
+    .catch((error) => {
+      console.error("failed while connecting to the db");
+      console.error(error);
+    });
 });
