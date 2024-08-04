@@ -7,13 +7,10 @@ import readline from "readline";
 import dayjs from "dayjs";
 
 import mongoose, { Mongoose } from "mongoose";
-// import { AppDataSource } from "./database/data-source";
-import {
-  CreateOrderItemService,
-  OrderItem,
-} from "./services/CreateOrderItemService";
-import { orderItemSchema } from "./schemas/OrderItem";
 
+import { OrderItem, OrderRepository } from "./repositories/OrderRepository";
+
+const orderRepository = new OrderRepository();
 const app = express();
 
 const dbUri = process.env.DB_URI as string;
@@ -52,24 +49,6 @@ type RequestFileLine = {
   date: string; // 8
 };
 
-type ProductResponse = {
-  product_id: number;
-  value: number;
-};
-
-type OrderResponse = {
-  order_id: number;
-  total: number;
-  date: Date;
-  products: ProductResponse[];
-};
-
-type UserResponse = {
-  user_id: number;
-  name: string;
-  orders: OrderResponse[];
-};
-
 const lineFormatter = (line: string): RequestFileLine => {
   const userId = line.substring(0, 10);
   const userName = line.substring(10, 55).trim();
@@ -88,90 +67,42 @@ const lineFormatter = (line: string): RequestFileLine => {
   } as RequestFileLine;
 };
 
-const convertLineToOrderItem = (line: RequestFileLine): OrderItem => {
-  const strYear = line.date.substring(0, 4);
-  const strMonth = line.date.substring(4, 6);
-  const strDay = line.date.substring(6, 8);
+const convertLineToOrderItem = (rawLine: RequestFileLine): OrderItem => {
+  const strYear = rawLine.date.substring(0, 4);
+  const strMonth = rawLine.date.substring(4, 6);
+  const strDay = rawLine.date.substring(6, 8);
 
   return {
-    userId: parseInt(line.userId),
-    userName: line.userName,
-    orderId: parseInt(line.orderId),
-    productId: parseInt(line.productId),
-    value: parseFloat(line.value),
+    userId: parseInt(rawLine.userId),
+    userName: rawLine.userName,
+    orderId: parseInt(rawLine.orderId),
+    productId: parseInt(rawLine.productId),
+    value: parseFloat(rawLine.value),
     date: dayjs(`${strYear}-${strMonth}-${strDay}`).toDate(),
   };
 };
 
-// app.get("/", async (req: Request, res: Response) => {
-//   const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
-//   const items = await OrderItemModel.find();
-//   return res.json(items);
-// });
-
 app.get("/", async (req: Request, res: Response) => {
-  const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
+  const { orderId, fromDate, toDate } = req.query;
 
-  // const items = await OrderItemModel.aggregate([
-  //   {
-  //     $match: {
-  //       orderId: 177,
-  //     },
-  //   },
-  //   {
-  //     $group: {
-  //       _id: "$orderId",
-  //       total: { $sum: "$value" },
-  //       orders: {
-  //         $push: {
-  //           order_id: "$orderId",
-  //           user_id: "$userId",
-  //           name: "$userName",
-  //           date: "$date",
-  //           products: {
-  //             product_id: "$productId",
-  //             value: "$value",
-  //           },
-  //         },
-  //       },
-  //     },
-  //   },
-  //   {
-  //     $project: {
-  //       _id: 0,
-  //       orderId: "$_id",
-  //       total: 1,
-  //       orders: 1,
-  //     },
-  //   },
-  // ]);
+  const fromDateStartOfDay = fromDate
+    ? dayjs(fromDate as string)
+        .startOf("day")
+        .toDate()
+    : null;
+  const toDateEndOfDay = toDate
+    ? dayjs(toDate as string)
+        .endOf("day")
+        .toDate()
+    : null;
 
-  const items = await OrderItemModel.aggregate([
-    {
-      $match: {
-        orderId: 177,
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        user_id: "$userId",
-        name: "$userName",
-        orders: [
-          {
-            order_id: "$orderId",
-            total: { $sum: "$value" },
-            date: "$date",
-            products: [{ product_id: "$productId", value: "$value" }],
-          },
-        ],
-      },
-    },
-  ]);
+  let orderIdNum = orderId ? parseInt(orderId as string) : null;
 
-  //   {
-  //     $group: { _id: "$name", totalQuantity: { $sum: "$quantity" } }
-  //  }
+  const items = await orderRepository.find({
+    orderId: orderIdNum,
+    fromDate: fromDateStartOfDay,
+    toDate: toDateEndOfDay,
+  });
 
   return res.json(items);
 });
@@ -180,13 +111,13 @@ app.post("/upload", async (req: Request, res: Response) => {
   try {
     const { tempFilePath } = req.files?.service as UploadedFile;
 
-    const items: OrderItem[] = [];
-
     const file = readline.createInterface({
       input: fs.createReadStream(tempFilePath),
       output: process.stdout,
       terminal: false,
     });
+
+    const items: OrderItem[] = [];
 
     file
       .on("line", async (rawLine) => {
@@ -195,39 +126,41 @@ app.post("/upload", async (req: Request, res: Response) => {
         items.push(orderItem);
       })
       .on("close", async () => {
-        // TODO
-        /*         
-        terminou de extrair a lista do arquivo
-        */
+        // await orderRepository.save(items);
 
-        const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
+        const listOfOrderIDs = items.map((item) => item.orderId);
 
-        items.map(
-          async ({
-            userId,
-            userName,
-            orderId,
-            productId,
-            value,
-            date,
-          }: OrderItem) => {
-            try {
-              const doc = new OrderItemModel({
-                _id: new mongoose.Types.ObjectId(),
-                userId,
-                userName,
-                orderId,
-                productId,
-                value,
-                date,
-              });
-              const newDoc = await doc.save();
-              // console.log(newDoc);
-            } catch (error) {
-              console.error(error);
-            }
-          }
-        );
+        const uniqueOrderIDs = new Set(listOfOrderIDs);
+
+        console.log(uniqueOrderIDs);
+        // const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
+
+        // items.map(
+        //   async ({
+        //     userId,
+        //     userName,
+        //     orderId,
+        //     productId,
+        //     value,
+        //     date,
+        //   }: OrderItem) => {
+        //     try {
+        //       const doc = new OrderItemModel({
+        //         _id: new mongoose.Types.ObjectId(),
+        //         userId,
+        //         userName,
+        //         orderId,
+        //         productId,
+        //         value,
+        //         date,
+        //       });
+        //       const newDoc = await doc.save();
+        //       // console.log(newDoc);
+        //     } catch (error) {
+        //       console.error(error);
+        //     }
+        //   }
+        // );
         return res.json(items);
       });
   } catch (error) {
