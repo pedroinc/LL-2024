@@ -1,4 +1,3 @@
-import dayjs from "dayjs";
 import { OrderRepository } from "../repositories/OrderRepository";
 import { getEndOfDay, getStartOfDay } from "../helpers/date";
 
@@ -10,7 +9,7 @@ interface QueryParams {
   toDate?: string | null | unknown;
 }
 
-interface OrderItemFilters {
+export interface OrderItemFilters {
   orderId?: number | null;
   fromDate?: Date | null;
   toDate?: Date | null;

@@ -4,11 +4,10 @@ import express, { Request, Response } from "express";
 import fileUpload, { UploadedFile } from "express-fileupload";
 import fs from "fs";
 import readline from "readline";
-import dayjs from "dayjs";
 
-import mongoose, { Mongoose } from "mongoose";
+import mongoose from "mongoose";
 
-import { OrderItem, OrderRepository } from "./repositories/OrderRepository";
+import { OrderItem } from "./repositories/OrderRepository";
 import {
   convertLineToOrderItem,
   IngestOrderItemsService,
@@ -16,7 +15,6 @@ import {
 } from "./services/IngestOrderItemsService";
 import { FindOrderService } from "./services/FindOrderService";
 
-const orderRepository = new OrderRepository();
 const app = express();
 
 const dbUri = process.env.DB_URI as string;
@@ -51,7 +49,6 @@ app.get("/", async (req: Request, res: Response) => {
   const items = await findOrderService.execute({ orderId, fromDate, toDate });
   return res.json(items);
 });
-
 
 // ingest route (file upload key 'service')
 app.post("/upload", async (req: Request, res: Response) => {
@@ -103,7 +100,7 @@ app.listen(config.port, config.host, () => {
   console.log(`server running on port ${config.port}`);
 
   dbConnect(dbUri)
-    .then((connection) => {
+    .then(() => {
       // db = connection;
       console.log("mongo initialized");
     })

@@ -1,4 +1,4 @@
-import mongoose, { Aggregate, Model, Types } from "mongoose";
+import { Aggregate, Model, Types } from "mongoose";
 import { OrderItemDocument, OrderItemModel } from "../schemas/OrderItem";
 import { OrderItemFilters } from "../services/FindOrderService";
 

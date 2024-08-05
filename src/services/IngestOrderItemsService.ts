@@ -14,13 +14,13 @@ export type RequestFileLine = {
   date: string; // 8
 };
 
-export const lineFormatter = (line: string): RequestFileLine => {
-  const userId = line.substring(0, 10);
-  const userName = line.substring(10, 55).trim();
-  const orderId = line.substring(55, 65);
-  const productId = line.substring(65, 75);
-  const value = line.substring(75, 87).trim();
-  const date = line.substring(87, 95);
+export const lineFormatter = (rawLine: string): RequestFileLine => {
+  const userId = rawLine.substring(0, 10);
+  const userName = rawLine.substring(10, 55).trim();
+  const orderId = rawLine.substring(55, 65);
+  const productId = rawLine.substring(65, 75);
+  const value = rawLine.substring(75, 87).trim();
+  const date = rawLine.substring(87, 95);
 
   return {
     userId,
@@ -32,17 +32,17 @@ export const lineFormatter = (line: string): RequestFileLine => {
   } as RequestFileLine;
 };
 
-export const convertLineToOrderItem = (rawLine: RequestFileLine): OrderItem => {
-  const strYear = rawLine.date.substring(0, 4);
-  const strMonth = rawLine.date.substring(4, 6);
-  const strDay = rawLine.date.substring(6, 8);
+export const convertLineToOrderItem = (fileLine: RequestFileLine): OrderItem => {
+  const strYear = fileLine.date.substring(0, 4);
+  const strMonth = fileLine.date.substring(4, 6);
+  const strDay = fileLine.date.substring(6, 8);
 
   return {
-    userId: parseInt(rawLine.userId),
-    userName: rawLine.userName,
-    orderId: parseInt(rawLine.orderId),
-    productId: parseInt(rawLine.productId),
-    value: parseFloat(rawLine.value),
+    userId: parseInt(fileLine.userId),
+    userName: fileLine.userName,
+    orderId: parseInt(fileLine.orderId),
+    productId: parseInt(fileLine.productId),
+    value: parseFloat(fileLine.value),
     date: dayjs(`${strYear}-${strMonth}-${strDay}`).toDate(),
   };
 };
