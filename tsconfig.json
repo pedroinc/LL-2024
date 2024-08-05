@@ -1,8 +1,18 @@
 {
     "compilerOptions": {
+		// Treat files as modules even if it doesn't use import/export
+		"moduleDetection": "force",
+		// Ignore module structure
+		"module": "Preserve",
+		// Allow JSON modules to be imported
+		"resolveJsonModule": true,
+		// Allow JS files to be imported from TS and vice versa
+		"allowJs": true,
+		// Disallow features that require cross-file awareness
+		"isolatedModules": true,
+
         "esModuleInterop": true,
-        "module": "NodeNext",
-        "moduleResolution": "NodeNext",
+        "moduleResolution": "Node",
         "target": "ES2020",
         "sourceMap": true,
         "outDir": "./dist",
@@ -17,3 +27,4 @@
     },
     "include": ["src/**/*"],
 }
+
