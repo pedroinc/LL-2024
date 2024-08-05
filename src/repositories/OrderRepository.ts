@@ -1,6 +1,6 @@
-import mongoose, { Aggregate } from "mongoose";
-import { orderItemSchema } from "../schemas/OrderItem";
-import { Console } from "console";
+import mongoose, { Aggregate, Model, Types } from "mongoose";
+import { OrderItemDocument, OrderItemModel } from "../schemas/OrderItem";
+import { OrderItemFilters } from "../services/FindOrderService";
 
 export type OrderItem = {
   userId: number;
@@ -11,16 +11,8 @@ export type OrderItem = {
   date: Date;
 };
 
-export type OrderFilters = {
-  orderId: number | null;
-  fromDate: Date | null;
-  toDate: Date | null;
-};
-
 export class OrderRepository {
   public async save(items: OrderItem[]) {
-    const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
-
     items.map(
       async ({
         userId,
@@ -32,7 +24,7 @@ export class OrderRepository {
       }: OrderItem) => {
         try {
           const doc = new OrderItemModel({
-            _id: new mongoose.Types.ObjectId(),
+            _id: new Types.ObjectId(),
             userId,
             userName,
             orderId,
@@ -49,27 +41,39 @@ export class OrderRepository {
     );
   }
 
+  public async findOneBy({
+    userId,
+    orderId,
+    productId,
+  }): Promise<OrderItemDocument | null> {
+    return await OrderItemModel.findOne({
+      userId,
+      orderId,
+      productId,
+    });
+  }
+
   public async find({
     orderId,
     fromDate,
     toDate,
-  }: OrderFilters): Promise<OrderItem[]> {
-    const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
+  }: OrderItemFilters): Promise<any> {
+    let matchClause = {};
 
-    // const matchClause = {
-    //   $match: {},
-    // };
+    if (orderId) {
+      matchClause["orderId"] = orderId;
+    }
 
-    // if (fromDate && toDate) {
-    //   matchClause['$match']['date'] = {
-    //     $gte: fromDate,
-    //     $lte: toDate,
-    //   }
-    // }
+    if (fromDate && toDate) {
+      matchClause["date"] = {
+        $gte: fromDate,
+        $lte: toDate,
+      };
+    }
 
     const pipeline = [
       {
-        $match: orderId ? { orderId: orderId } : {},
+        $match: matchClause,
       },
       {
         $group: {
@@ -114,87 +118,6 @@ export class OrderRepository {
       },
     ];
 
-    return (await OrderItemModel.aggregate(pipeline)) as OrderItem[];
+    return await OrderItemModel.aggregate(pipeline);
   }
-
-  // public async find({
-  //   orderIds,
-  //   fromDate,
-  //   toDate,
-  // }: OrderFilters): Promise<OrderItem[]> {
-  //   const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
-
-  //   const ids =
-  //     orderIds && orderIds.length
-  //       ? orderIds.map((el) => {
-  //           return new mongoose.mongo.ObjectId(el);
-  //         })
-  //       : undefined;
-
-  //   // { "$in": ids }
-  //   const pipeline = [
-  //     {
-  //       $match: orderId
-  //         ? {
-  //             orderId,
-  //           }
-  //         : {},
-
-  //       date: {
-  //         $gte: fromDate,
-  //         $lte: toDate,
-  //       },
-  //     },
-  //     {
-  //       $match: ids
-  //         ? {
-  //             $orderId: { $in: ids },
-  //           }
-  //         : {},
-  //     },
-  //     {
-  //       $group: {
-  //         _id: {
-  //           userId: "$userId",
-  //           userName: "$userName",
-  //           orderId: "$orderId",
-  //           date: "$date",
-  //         },
-  //         products: {
-  //           $push: {
-  //             product_id: "$productId",
-  //             value: "$value",
-  //           },
-  //         },
-  //         total: { $sum: "$value" },
-  //       },
-  //     },
-  //     {
-  //       $group: {
-  //         _id: {
-  //           userId: "$_id.userId",
-  //           userName: "$_id.userName",
-  //         },
-  //         orders: {
-  //           $push: {
-  //             order_id: "$_id.orderId",
-  //             total: "$total",
-  //             date: "$_id.date",
-  //             products: "$products",
-  //           },
-  //         },
-  //       },
-  //     },
-  //     {
-  //       $project: {
-  //         _id: 0,
-  //         user_id: "$_id.userId",
-  //         name: "$_id.userName",
-  //         orders: "$orders",
-  //       },
-  //     },
-  //   ];
-
-  //   return (await OrderItemModel.aggregate(pipeline)) as OrderItem[];
-  // }
 }

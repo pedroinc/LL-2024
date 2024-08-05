@@ -9,6 +9,12 @@ import dayjs from "dayjs";
 import mongoose, { Mongoose } from "mongoose";
 
 import { OrderItem, OrderRepository } from "./repositories/OrderRepository";
+import {
+  convertLineToOrderItem,
+  IngestOrderItemsService,
+  lineFormatter,
+} from "./services/IngestOrderItemsService";
+import { FindOrderService } from "./services/FindOrderService";
 
 const orderRepository = new OrderRepository();
 const app = express();
@@ -22,13 +28,12 @@ const config = {
   host,
 };
 
-let db: Mongoose;
-
 async function dbConnect(uri) {
   return await mongoose.connect(uri);
 }
 
-// const createOrderItemService = new CreateOrderItemService();
+const ingestOrderItemsService = new IngestOrderItemsService();
+const findOrderService = new FindOrderService();
 
 app.use(express.json());
 
@@ -40,73 +45,15 @@ app.use(
   })
 );
 
-type RequestFileLine = {
-  userId: string; // 10
-  userName: string; // 45
-  orderId: string; // 10
-  productId: string; // 10
-  value: string; // 12
-  date: string; // 8
-};
-
-const lineFormatter = (line: string): RequestFileLine => {
-  const userId = line.substring(0, 10);
-  const userName = line.substring(10, 55).trim();
-  const orderId = line.substring(55, 65);
-  const productId = line.substring(65, 75);
-  const value = line.substring(75, 87).trim();
-  const date = line.substring(87, 95);
-
-  return {
-    userId,
-    userName,
-    orderId,
-    productId,
-    value,
-    date,
-  } as RequestFileLine;
-};
-
-const convertLineToOrderItem = (rawLine: RequestFileLine): OrderItem => {
-  const strYear = rawLine.date.substring(0, 4);
-  const strMonth = rawLine.date.substring(4, 6);
-  const strDay = rawLine.date.substring(6, 8);
-
-  return {
-    userId: parseInt(rawLine.userId),
-    userName: rawLine.userName,
-    orderId: parseInt(rawLine.orderId),
-    productId: parseInt(rawLine.productId),
-    value: parseFloat(rawLine.value),
-    date: dayjs(`${strYear}-${strMonth}-${strDay}`).toDate(),
-  };
-};
-
+// search route
 app.get("/", async (req: Request, res: Response) => {
   const { orderId, fromDate, toDate } = req.query;
-
-  const fromDateStartOfDay = fromDate
-    ? dayjs(fromDate as string)
-        .startOf("day")
-        .toDate()
-    : null;
-  const toDateEndOfDay = toDate
-    ? dayjs(toDate as string)
-        .endOf("day")
-        .toDate()
-    : null;
-
-  let orderIdNum = orderId ? parseInt(orderId as string) : null;
-
-  const items = await orderRepository.find({
-    orderId: orderIdNum,
-    fromDate: fromDateStartOfDay,
-    toDate: toDateEndOfDay,
-  });
-
+  const items = await findOrderService.execute({ orderId, fromDate, toDate });
   return res.json(items);
 });
 
+
+// ingest route (file upload key 'service')
 app.post("/upload", async (req: Request, res: Response) => {
   try {
     const { tempFilePath } = req.files?.service as UploadedFile;
@@ -126,46 +73,29 @@ app.post("/upload", async (req: Request, res: Response) => {
         items.push(orderItem);
       })
       .on("close", async () => {
-        // await orderRepository.save(items);
+        try {
+          console.log("*** starting ingest process ***");
 
-        const listOfOrderIDs = items.map((item) => item.orderId);
+          await ingestOrderItemsService.execute(items);
 
-        const uniqueOrderIDs = new Set(listOfOrderIDs);
+          console.log("*** finished ingest process ***");
 
-        console.log(uniqueOrderIDs);
-        // const OrderItemModel = mongoose.model("OrderItem", orderItemSchema);
+          return res.status(200).send({
+            message: "the file has been ingested :)",
+          });
+        } catch (error) {
+          console.error(error);
 
-        // items.map(
-        //   async ({
-        //     userId,
-        //     userName,
-        //     orderId,
-        //     productId,
-        //     value,
-        //     date,
-        //   }: OrderItem) => {
-        //     try {
-        //       const doc = new OrderItemModel({
-        //         _id: new mongoose.Types.ObjectId(),
-        //         userId,
-        //         userName,
-        //         orderId,
-        //         productId,
-        //         value,
-        //         date,
-        //       });
-        //       const newDoc = await doc.save();
-        //       // console.log(newDoc);
-        //     } catch (error) {
-        //       console.error(error);
-        //     }
-        //   }
-        // );
-        return res.json(items);
+          return res.sendStatus(400).send({
+            error: "error while processing the file",
+          });
+        }
       });
   } catch (error) {
     console.error(error);
-    return res.json({ error });
+    return res.sendStatus(500).send({
+      error: "internal server error",
+    });
   }
 });
 
@@ -174,9 +104,8 @@ app.listen(config.port, config.host, () => {
 
   dbConnect(dbUri)
     .then((connection) => {
-      db = connection;
+      // db = connection;
       console.log("mongo initialized");
-      console.log(db);
     })
     .catch((error) => {
       console.error("failed while connecting to the db");
