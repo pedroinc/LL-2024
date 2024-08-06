@@ -4,7 +4,7 @@ import {
   lineFormatter,
 } from "./IngestOrderItemsService";
 
-test("when using a valid date input, should return an instance of date", () => {
+test("should process a raw file line into a formatted object", () => {
   const rawTxtFileLine =
     "0000000070                              Palmer Prosacco00000007530000000003     1836.7420210308";
 
